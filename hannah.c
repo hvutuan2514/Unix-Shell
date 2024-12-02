@@ -76,7 +76,7 @@ void execute_fork(char **cmd) {
     } 
     else if (pid > 0) {
         fg_pid = pid;
-        waitpid(pid, NULL, 0);
+        waitpid(pid, NULL, WUNTRACED);
         fg_pid = 0;
     } 
     else {
