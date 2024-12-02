@@ -17,7 +17,32 @@ void print_error() {
 }
 
 void execute_command(char **args) {
-    for (int i = 0; path[i] != NULL; i++) {
+    int i;
+    char *outfile = NULL;
+    for (i = 0; args[i] != NULL; i++) {
+        if (strcmp(args[i], ">") == 0) {
+            if (args[i+1] == NULL || args[i+2] != NULL) {
+                print_error();
+                exit(1);
+            }
+            outfile = args[i+1];
+            args[i] = NULL;
+            break;
+        }
+    }
+    
+    if (outfile != NULL) {
+        int fd = open(outfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fd == -1) {
+            print_error();
+            exit(1);
+        }
+        dup2(fd, STDOUT_FILENO);
+        dup2(fd, STDERR_FILENO);
+        close(fd);
+    }
+
+    for (i = 0; path[i] != NULL; i++) {
         char cmd[MAX_INPUT_SIZE];
         snprintf(cmd, sizeof(cmd), "%s/%s", path[i], args[0]);
         if (access(cmd, X_OK) == 0) {
@@ -53,17 +78,20 @@ int main(int argc, char *argv[]) {
         if (argc == 1){
             printf("hannah> ");
         }
-        if (getline(&line, &len, input) == -1) break;
-
-        // Remove newline
+        if (getline(&line, &len, input) == -1){
+            break;
+        }
+        
         line[strcspn(line, "\n")] = '\0';
 
         char *tokens[MAX_TOKENS];
         int token_count = 0;
-        char *token = strtok(line, " ");
-        while (token && token_count < MAX_TOKENS - 1) {
-            tokens[token_count++] = token;
-            token = strtok(NULL, " ");
+        char *str = line;
+        char *token;
+        while ((token = strsep(&str, " \t")) && token_count < MAX_TOKENS - 1) {
+            if (*token != '\0') {
+                tokens[token_count++] = token;
+            }
         }
         tokens[token_count] = NULL;
 
@@ -104,16 +132,35 @@ int main(int argc, char *argv[]) {
                 print_error();
                 continue;
             }
-            char **loop_cmd = &tokens[2];
+            char *modified_args[MAX_TOKENS];
+            int cmd_len = token_count - 2;
             
             for (int i = 0; i < count; i++) {
+                for (int j = 0; j < cmd_len; j++) {
+                    if (strcmp(tokens[j + 2], "$loop") == 0) {
+                        char loop_num[20];
+                        sprintf(loop_num, "%d", i + 1);
+                        modified_args[j] = strdup(loop_num);
+                    } else {
+                        modified_args[j] = tokens[j + 2];
+                    }
+                }
+                
+                modified_args[cmd_len] = NULL;
+
                 pid_t pid = fork();
                 if (pid == 0) {
-                    execute_command(loop_cmd);
+                    execute_command(modified_args);
                 } else if (pid > 0) {
                     waitpid(pid, NULL, 0);
                 } else {
                     print_error();
+                }
+
+                for (int j = 0; j < cmd_len; j++) {
+                    if (strcmp(tokens[j + 2], "$loop") == 0) {
+                        free(modified_args[j]);
+                    }
                 }
             }
         }
