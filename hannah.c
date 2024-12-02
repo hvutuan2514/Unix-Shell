@@ -4,9 +4,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <fcntl.h>
-#include <errno.h>
 
-#define MAX_INPUT_SIZE 1024
 #define MAX_TOKENS 100
 
 char **path = NULL;
@@ -16,7 +14,7 @@ void print_error() {
     write(STDERR_FILENO, error_message, strlen(error_message));
 }
 
-void execute_command(char **args) {
+void execute_cmd(char **args) {
     int i;
     char *outfile = NULL;
     for (i = 0; args[i] != NULL; i++) {
@@ -32,7 +30,7 @@ void execute_command(char **args) {
     }
     
     if (outfile != NULL) {
-        int fd = open(outfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        int fd = open(outfile, O_WRONLY | O_CREAT | O_TRUNC, 0666);
         if (fd == -1) {
             print_error();
             exit(1);
@@ -43,7 +41,7 @@ void execute_command(char **args) {
     }
 
     for (i = 0; path[i] != NULL; i++) {
-        char cmd[MAX_INPUT_SIZE];
+        char cmd[1024];
         snprintf(cmd, sizeof(cmd), "%s/%s", path[i], args[0]);
         if (access(cmd, X_OK) == 0) {
             execv(cmd, args);
@@ -53,6 +51,63 @@ void execute_command(char **args) {
     }
     print_error();
     exit(1);
+}
+
+void execute_fork(char **cmd) {
+    pid_t pid = fork();
+    if (pid == 0) {
+        execute_cmd(cmd);
+    } else if (pid > 0) {
+        waitpid(pid, NULL, 0);
+    } else {
+        print_error();
+    }
+}
+
+void exit_cmd(char **tokens, int token_count) {
+    if (token_count != 1) {
+        print_error();
+    } else {
+        exit(0);
+    }
+}
+
+void cd_cmd(char **tokens, int token_count) {
+    if (token_count != 2 || chdir(tokens[1]) != 0) {
+        print_error();
+    }
+}
+
+void path_cmd(char **tokens, int token_count) {
+    for (int i = 0; path[i] != NULL; i++) {
+        free(path[i]);
+    }
+    path = malloc(sizeof(char*) * (token_count));
+    for (int i = 1; i < token_count; i++) {
+        path[i-1] = strdup(tokens[i]);
+    }
+    path[token_count-1] = NULL;
+}
+
+void loop_cmd(char **tokens, int token_count) {
+    if (token_count < 3 || atoi(tokens[1]) <= 0) {
+        print_error();
+        return;
+    }
+
+    int count = atoi(tokens[1]);
+    char **cmd = &tokens[2];
+    char loop_str[20];
+
+    for (int i = 1; i <= count; i++) {
+        sprintf(loop_str, "%d", i);
+        for (int j = 0; cmd[j]; j++) {
+            if (strcmp(cmd[j], "$loop") == 0) {
+                cmd[j] = loop_str;
+            }
+        }
+        execute_fork(cmd);
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -65,10 +120,16 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    FILE *input = (argc == 2) ? fopen(argv[1], "r") : stdin;
-    if (!input) {
+    FILE *input;
+    if (argc == 2) {
+        input = fopen(argv[1], "r");
+    } 
+    else if (!input) {
         print_error();
         exit(1);
+    }
+    else {
+        input = stdin;
     }
 
     char *line = NULL;
@@ -95,84 +156,25 @@ int main(int argc, char *argv[]) {
         }
         tokens[token_count] = NULL;
 
-        if (token_count == 0) continue;
+        if (token_count == 0){
+            continue;
+        }
 
         // Built-in commands
         if (strcmp(tokens[0], "exit") == 0) {
-            if (token_count != 1){
-                print_error();
-            }
-            else{
-                exit(0);
-            }
+            exit_cmd(tokens, token_count);
         } 
         else if (strcmp(tokens[0], "cd") == 0) {
-            if (token_count != 2 || chdir(tokens[1]) != 0){
-                print_error();
-            }
+            cd_cmd(tokens, token_count);
         } 
         else if (strcmp(tokens[0], "path") == 0) {
-            for (int i = 0; path[i] != NULL; i++) {
-                free(path[i]);
-            }   
-            path = malloc(sizeof(char*) * (token_count));
-            for (int i = 1; i < token_count; i++) {
-                path[i-1] = strdup(tokens[i]);
-            }
-            path[token_count-1] = NULL;
+            path_cmd(tokens, token_count);
         } 
         else if (strcmp(tokens[0], "loop") == 0) {
-            if (token_count < 3) {
-                print_error();
-                continue;
-            }
-            
-            int count = atoi(tokens[1]);
-            if (count <= 0) {
-                print_error();
-                continue;
-            }
-            char *modified_args[MAX_TOKENS];
-            int cmd_len = token_count - 2;
-            
-            for (int i = 0; i < count; i++) {
-                for (int j = 0; j < cmd_len; j++) {
-                    if (strcmp(tokens[j + 2], "$loop") == 0) {
-                        char loop_num[20];
-                        sprintf(loop_num, "%d", i + 1);
-                        modified_args[j] = strdup(loop_num);
-                    } else {
-                        modified_args[j] = tokens[j + 2];
-                    }
-                }
-                
-                modified_args[cmd_len] = NULL;
-
-                pid_t pid = fork();
-                if (pid == 0) {
-                    execute_command(modified_args);
-                } else if (pid > 0) {
-                    waitpid(pid, NULL, 0);
-                } else {
-                    print_error();
-                }
-
-                for (int j = 0; j < cmd_len; j++) {
-                    if (strcmp(tokens[j + 2], "$loop") == 0) {
-                        free(modified_args[j]);
-                    }
-                }
-            }
+            loop_cmd(tokens, token_count);
         }
         else {
-            pid_t pid = fork();
-            if (pid == 0) {
-                execute_command(tokens);
-            } else if (pid > 0) {
-                waitpid(pid, NULL, 0);
-            } else {
-                print_error();
-            }
+            execute_fork(tokens);
         }
     }
 
