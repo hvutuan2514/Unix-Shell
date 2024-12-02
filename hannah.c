@@ -6,13 +6,15 @@
 #include <fcntl.h>
 #include <signal.h>
 
-#define MAX_TOKENS 100
+#define MAX_ARGS 100 // Maximum number of arguments
 
-char **path = NULL;
+char **path = NULL; // global path variable
 
+// PIDs for fg and bg commands
 pid_t fg_pid = 0;
 pid_t bg_pid = 0;
 
+// Signal handling for Ctrl-C and Ctrl-Z
 void signal_handler(int signo) {
     if (signo == SIGINT && fg_pid > 0) {
         kill(fg_pid, SIGINT);
@@ -25,16 +27,21 @@ void signal_handler(int signo) {
     }
 }
 
+// Prints error message
 void print_error() {
     char error_message[30] = "An error has occurred\n";
     write(STDERR_FILENO, error_message, strlen(error_message));
 }
 
+// Executes command with redirection
 void execute_cmd(char **args) {
     int i;
     char *outfile = NULL;
+
+    // Checks for '>' character
     for (i = 0; args[i] != NULL; i++) {
         if (strcmp(args[i], ">") == 0) {
+            // Verifies redirection syntax
             if (args[i+1] == NULL || args[i+2] != NULL) {
                 print_error();
                 exit(1);
@@ -46,21 +53,26 @@ void execute_cmd(char **args) {
     }
     
     if (outfile != NULL) {
+        // Opens or creates output file
         int fd = open(outfile, O_WRONLY | O_CREAT | O_TRUNC, 0666);
         if (fd == -1) {
             print_error();
             exit(1);
         }
+        // Reroutes stdout and stderr to the output file
         dup2(fd, STDOUT_FILENO);
         dup2(fd, STDERR_FILENO);
         close(fd);
     }
 
+    // Searches for command in path
     for (i = 0; path[i] != NULL; i++) {
         char cmd[1024];
         snprintf(cmd, sizeof(cmd), "%s/%s", path[i], args[0]);
+
+        // Checks if command exists and is executable
         if (access(cmd, X_OK) == 0) {
-            execv(cmd, args);
+            execv(cmd, args); // Runs command
             print_error();
             exit(1);
         }
@@ -69,12 +81,13 @@ void execute_cmd(char **args) {
     exit(1);
 }
 
+// Forks and execute command in child process
 void execute_fork(char **cmd) {
     pid_t pid = fork();
-    if (pid == 0) {
+    if (pid == 0) { // Child process
         execute_cmd(cmd);
     } 
-    else if (pid > 0) {
+    else if (pid > 0) { // Parent process
         fg_pid = pid;
         waitpid(pid, NULL, WUNTRACED);
         fg_pid = 0;
@@ -84,8 +97,9 @@ void execute_fork(char **cmd) {
     }
 }
 
-void exit_cmd(char **tokens, int token_count) {
-    if (token_count != 1) {
+// Exits shell
+void exit_cmd(char **args, int arg_count) {
+    if (arg_count != 1) {
         print_error();
     } 
     else {
@@ -93,36 +107,41 @@ void exit_cmd(char **tokens, int token_count) {
     }
 }
 
-void cd_cmd(char **tokens, int token_count) {
-    if (token_count != 2 || chdir(tokens[1]) != 0) {
+// Changes directories
+void cd_cmd(char **args, int arg_count) {
+    if (arg_count != 2 || chdir(args[1]) != 0) {
         print_error();
     }
 }
 
-void path_cmd(char **tokens, int token_count) {
+// Updates old path with newly specified path
+void path_cmd(char **args, int arg_count) {
     for (int i = 0; path[i] != NULL; i++) {
         free(path[i]);
     }
-    path = malloc(sizeof(char*) * (token_count));
-    for (int i = 1; i < token_count; i++) {
-        path[i-1] = strdup(tokens[i]);
+    path = malloc(sizeof(char*) * (arg_count));
+    for (int i = 1; i < arg_count; i++) {
+        path[i-1] = strdup(args[i]);
     }
-    path[token_count-1] = NULL;
+    path[arg_count-1] = NULL;
 }
 
-void loop_cmd(char **tokens, int token_count) {
-    if (token_count < 3 || atoi(tokens[1]) <= 0) {
+// Runs a command multiple times
+void loop_cmd(char **args, int arg_count) {
+    if (arg_count < 3 || atoi(args[1]) <= 0) {
         print_error();
         return;
     }
 
-    int count = atoi(tokens[1]);
-    char **cmd = &tokens[2];
+    int count = atoi(args[1]); // Gets number of iterations
+    char **cmd = &args[2];
     char loop_str[20];
 
+    // Executes loop command 'count' times
     for (int i = 1; i <= count; i++) {
         sprintf(loop_str, "%d", i);
         for (int j = 0; cmd[j]; j++) {
+            // Adds a loop variable that is replaced with counter
             if (strcmp(cmd[j], "$loop") == 0) {
                 cmd[j] = loop_str;
             }
@@ -131,6 +150,7 @@ void loop_cmd(char **tokens, int token_count) {
     }
 }
 
+// Resumes process in foreground
 void fg_cmd() {
     if (bg_pid > 0) {
         fg_pid = bg_pid;
@@ -140,6 +160,7 @@ void fg_cmd() {
     }
 }
 
+// Resumes process in background
 void bg_cmd() {
     if (bg_pid > 0) {
         kill(bg_pid, SIGCONT);
@@ -148,28 +169,20 @@ void bg_cmd() {
 }
 
 int main(int argc, char *argv[]) {
+    // Sets up signal handling
     signal(SIGINT, signal_handler);
     signal(SIGTSTP, signal_handler);
 
+    // Initializes shell path
     path = malloc(2 * sizeof(char*));
     path[0] = strdup("/bin");
     path[1] = NULL;
-    
-    if (argc > 2) {
-        print_error();
-        exit(1);
-    }
 
-    FILE *input;
-    if (argc == 2) {
-        input = fopen(argv[1], "r");
-    } 
-    else if (!input) {
+    // Opens input file or uses stdin
+    FILE *input = (argc == 2) ? fopen(argv[1], "r") : stdin;
+    if (!input || argc > 2) {
         print_error();
         exit(1);
-    }
-    else {
-        input = stdin;
     }
 
     char *line = NULL;
@@ -177,55 +190,61 @@ int main(int argc, char *argv[]) {
 
     while (1) {
         if (argc == 1){
-            printf("hannah> ");
+            printf("hannah> "); // Prompt 
         }
+
+        // Reads lines of input
         if (getline(&line, &len, input) == -1){
             break;
         }
         
+        // Removes newline character
         line[strcspn(line, "\n")] = '\0';
 
-        char *tokens[MAX_TOKENS];
-        int token_count = 0;
+        // Parses input into arguments
+        char *args[MAX_ARGS];
         char *str = line;
-        char *token;
-        while ((token = strsep(&str, " \t")) && token_count < MAX_TOKENS - 1) {
-            if (*token != '\0') {
-                tokens[token_count++] = token;
+        char *arg;
+        int arg_count = 0;
+        
+        // Splits input
+        while ((arg = strsep(&str, " \t")) && arg_count < MAX_ARGS - 1) {
+            if (*arg != '\0') {
+                args[arg_count++] = arg;
             }
         }
-        tokens[token_count] = NULL;
 
-        if (token_count == 0){
+        args[arg_count] = NULL;
+
+        if (arg_count == 0){ // Skips empty lines
             continue;
         }
 
         // Built-in commands
-        if (strcmp(tokens[0], "exit") == 0) {
-            exit_cmd(tokens, token_count);
+        if (strcmp(args[0], "exit") == 0) {
+            exit_cmd(args, arg_count);
         } 
-        else if (strcmp(tokens[0], "cd") == 0) {
-            cd_cmd(tokens, token_count);
+        else if (strcmp(args[0], "cd") == 0) {
+            cd_cmd(args, arg_count);
         } 
-        else if (strcmp(tokens[0], "path") == 0) {
-            path_cmd(tokens, token_count);
+        else if (strcmp(args[0], "path") == 0) {
+            path_cmd(args, arg_count);
         } 
-        else if (strcmp(tokens[0], "loop") == 0) {
-            loop_cmd(tokens, token_count);
+        else if (strcmp(args[0], "loop") == 0) {
+            loop_cmd(args, arg_count);
         }
-        else if (strcmp(tokens[0], "fg") == 0) {
+        else if (strcmp(args[0], "fg") == 0) {
             fg_cmd();
         }
-        else if (strcmp(tokens[0], "bg") == 0) {
+        else if (strcmp(args[0], "bg") == 0) {
             bg_cmd();
         }
         else {
-            execute_fork(tokens);
+            execute_fork(args);
         }
     }
-
     free(line);
-    if (input != stdin){
+    if (input != stdin){ // Closes input file
         fclose(input);
     }
     return 0;
