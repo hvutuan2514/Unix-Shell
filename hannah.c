@@ -16,6 +16,7 @@ pid_t bg_pid = 0;
 void signal_handler(int signo) {
     if (signo == SIGINT && fg_pid > 0) {
         kill(fg_pid, SIGINT);
+        printf("\n");
     } 
     else if (signo == SIGTSTP && fg_pid > 0) {
         kill(fg_pid, SIGTSTP);
@@ -75,7 +76,7 @@ void execute_fork(char **cmd) {
     } 
     else if (pid > 0) {
         fg_pid = pid;
-        waitpid(pid, NULL, WUNTRACED);
+        waitpid(pid, NULL, 0);
         fg_pid = 0;
     } 
     else {
