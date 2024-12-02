@@ -4,10 +4,25 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+#include <signal.h>
 
 #define MAX_TOKENS 100
 
 char **path = NULL;
+
+pid_t fg_pid = 0;
+pid_t bg_pid = 0;
+
+void signal_handler(int signo) {
+    if (signo == SIGINT && fg_pid > 0) {
+        kill(fg_pid, SIGINT);
+    } 
+    else if (signo == SIGTSTP && fg_pid > 0) {
+        kill(fg_pid, SIGTSTP);
+        bg_pid = fg_pid;
+        printf("\n");
+    }
+}
 
 void print_error() {
     char error_message[30] = "An error has occurred\n";
@@ -57,9 +72,13 @@ void execute_fork(char **cmd) {
     pid_t pid = fork();
     if (pid == 0) {
         execute_cmd(cmd);
-    } else if (pid > 0) {
-        waitpid(pid, NULL, 0);
-    } else {
+    } 
+    else if (pid > 0) {
+        fg_pid = pid;
+        waitpid(pid, NULL, WUNTRACED);
+        fg_pid = 0;
+    } 
+    else {
         print_error();
     }
 }
@@ -67,7 +86,8 @@ void execute_fork(char **cmd) {
 void exit_cmd(char **tokens, int token_count) {
     if (token_count != 1) {
         print_error();
-    } else {
+    } 
+    else {
         exit(0);
     }
 }
@@ -110,7 +130,26 @@ void loop_cmd(char **tokens, int token_count) {
     }
 }
 
+void fg_cmd() {
+    if (bg_pid > 0) {
+        fg_pid = bg_pid;
+        kill(bg_pid, SIGCONT);
+        waitpid(bg_pid, NULL, 0);
+        bg_pid = 0;
+    }
+}
+
+void bg_cmd() {
+    if (bg_pid > 0) {
+        kill(bg_pid, SIGCONT);
+        bg_pid = 0;
+    }
+}
+
 int main(int argc, char *argv[]) {
+    signal(SIGINT, signal_handler);
+    signal(SIGTSTP, signal_handler);
+
     path = malloc(2 * sizeof(char*));
     path[0] = strdup("/bin");
     path[1] = NULL;
@@ -172,6 +211,12 @@ int main(int argc, char *argv[]) {
         } 
         else if (strcmp(tokens[0], "loop") == 0) {
             loop_cmd(tokens, token_count);
+        }
+        else if (strcmp(tokens[0], "fg") == 0) {
+            fg_cmd();
+        }
+        else if (strcmp(tokens[0], "bg") == 0) {
+            bg_cmd();
         }
         else {
             execute_fork(tokens);
