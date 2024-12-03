@@ -35,7 +35,7 @@ void print_error() {
     write(STDERR_FILENO, error_message, strlen(error_message));
 }
 
-// Executes command with redirection
+// Executes command with output redirection
 void execute_cmd(char **args) {
     int i;
     char *outfile = NULL;
