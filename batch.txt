@@ -1,0 +1,19 @@
+ls
+echo "Hello World" > test.txt
+cat test.txt
+cp test.txt backup.txt
+ls
+cat backup.txt
+mv backup.txt renamed.txt
+ls
+cat renamed.txt
+cd /tmp
+ls
+path /usr/bin /bin
+ls
+loop 5 echo hello
+loop 5 echo hello $loop
+cat /etc/hostname
+clear
+exit
+
