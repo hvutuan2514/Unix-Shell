@@ -116,7 +116,7 @@ void cd_cmd(char **args, int arg_count) {
     }
 }
 
-// Updates old path with newly specified path
+// Manages directories to search for executable programs
 void path_cmd(char **args, int arg_count) {
     for (int i = 0; path[i] != NULL; i++) {
         free(path[i]);
