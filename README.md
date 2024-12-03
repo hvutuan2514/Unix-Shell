@@ -11,11 +11,29 @@ This project implements a simple Unix shell that can execute commands in both in
   - `cd <directory>`: Change directories.
   - `path <dir1> <dir2> ...`: Update old path to new path.
   - `loop <count> <command>`: Execute a command multiple times.
-- **Redirection**: Supports output redirection with `>`.
+- Can run executable commands as well (ls, cat, echo, cp, clear, mv, etc.)
+-  **Redirection**: Supports output redirection with `>`.
 
 ## How to Compile and Run
 1. Connect to the university `ember` Unix system using SSH Client.
 2. Transfer the required `.c` file into your directory on the Unix system.
 3. Compile the program using `gcc`:
 ```bash
-gcc -std=c99 -o hannah hannah.c 
+gcc -std=c99 -o hannah hannah.c
+```
+4. To enter **interactive** mode, run the shell without arguments:
+```bash
+./hannah
+```
+Example Usage:
+```bash
+hannah> ls
+hannah> cd ..
+hannah> path /bin /usr/bin
+hannah> loop 5 echo hello $loop
+hannah> exit
+```
+5. To enter **batch** mode, provide a file containing commands as an argument:
+```bash
+./hannah batch.txt
+```
