@@ -5,7 +5,9 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <sys/types.h> // For kill()
 
+#define _GNU_SOURCE // For getline() and strdup()
 #define MAX_ARGS 100 // Maximum number of arguments
 
 char **path = NULL; // global path variable
