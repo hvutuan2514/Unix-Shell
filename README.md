@@ -9,7 +9,7 @@ This project implements a simple Unix shell that can execute commands in both in
 - **Built-in Commands**:
   - `exit`: Exit the shell.
   - `cd <directory>`: Change directories.
-  - `path <dir1> <dir2> ...`: Update old path to new path.
+  - `path <dir1> <dir2> ...`: Modify directories to look for executable programs.
   - `loop <count> <command>`: Execute a command multiple times.
 - Can run executable commands as well (ls, cat, echo, cp, clear, mv, etc.)
 -  **Redirection**: Supports output redirection with `>`.
