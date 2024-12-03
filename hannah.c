@@ -1,3 +1,4 @@
+#define _GNU_SOURCE // For getline() and strdup()
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,7 +8,6 @@
 #include <signal.h>
 #include <sys/types.h> // For kill()
 
-#define _GNU_SOURCE // For getline() and strdup()
 #define MAX_ARGS 100 // Maximum number of arguments
 
 char **path = NULL; // global path variable
