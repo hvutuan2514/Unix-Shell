@@ -1,3 +1,4 @@
+# Test file operations
 ls
 echo "Hello World" > test.txt
 cat test.txt
@@ -7,13 +8,18 @@ cat backup.txt
 mv backup.txt renamed.txt
 ls
 cat renamed.txt
+
+# Test cd and path commands
 cd /tmp
 ls
 path /usr/bin /bin
 ls
+
+# Test loop command
 loop 5 echo hello
 loop 5 echo hello $loop
-cat /etc/hostname
+
+# Clear and exit
 clear
 exit
 
