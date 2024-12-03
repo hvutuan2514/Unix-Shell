@@ -194,8 +194,14 @@ int main(int argc, char *argv[]) {
         }
 
         // Reads lines of input
-        if (getline(&line, &len, input) == -1){
-            break;
+        ssize_t read = getline(&line, &len, input);
+        if (read == -1) {
+            if (feof(input)) {
+                // Clean exit at end of file
+                break;
+            }
+            print_error();
+            exit(1);
         }
         
         // Removes newline character
